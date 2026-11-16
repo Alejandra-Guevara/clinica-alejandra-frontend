@@ -5,7 +5,6 @@ export const resourceApi = {
   get: (key, id) => getData(api.get(`/${key}/${id}`)).then((r) => r.data),
   create: (key, data) => getData(api.post(`/${key}`, data)).then((r) => r.data),
   update: (key, id, data) => getData(api.put(`/${key}/${id}`, data)).then((r) => r.data),
-  remove: (key, id) => api.delete(`/${key}/${id}`),
   dashboard: () => getData(api.get('/dashboard')).then((r) => r.data),
   patientRecord: (id) => getData(api.get(`/pacientes/${id}/record`)).then((r) => r.data),
   registerPatientExport: (id) => getData(api.post(`/pacientes/${id}/record/export`)).then((r) => r.data),

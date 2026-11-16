@@ -27,7 +27,7 @@ El backend requiere una base previamente preparada. El archivo SQL llama a la ba
 
 ## Alcance pendiente
 
-`npm run test:e2e` ejecuta ocho flujos con API simulada: login/logout, ficha y auditoria, denegacion por rol, portal, asignaciones y busqueda contextual de pacientes. La funcion y las rutas de recuperacion de contrasena se eliminaron. Las asociaciones se registran desde formularios con opciones de referencia cargadas desde la API. Usuarios y roles tienen gestion administrativa; los nombres de roles base estan protegidos. Las tablas incluyen acciones de eliminación con confirmación según el rol y las relaciones; la API bloquea datos clínicos que deben conservarse. Las historias se archivan; consultas finalizadas/anuladas, resultados informados y auditoría no se eliminan. No se simulan filas para completar el dashboard.
+`npm run test:e2e` ejecuta ocho flujos con API simulada: login/logout, ficha y auditoria, denegacion por rol, portal, asignaciones y busqueda contextual de pacientes. La funcion y las rutas de recuperacion de contrasena se eliminaron. Las asociaciones se registran desde formularios con opciones de referencia cargadas desde la API. Usuarios y roles tienen gestion administrativa; los nombres de roles base estan protegidos. Los registros pueden crearse y editarse según el rol; la eliminación está deshabilitada. Las historias clínicas se archivan y la auditoría se conserva. No se simulan filas para completar el dashboard.
 
 ## OpenShift
 
