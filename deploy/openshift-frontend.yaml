@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clinica-alejandra-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: clinica-alejandra-frontend }
+  template:
+    metadata:
+      labels: { app: clinica-alejandra-frontend }
+    spec:
+      containers:
+        - name: frontend
+          image: image-registry.openshift-image-registry.svc:5000/namespace/clinica-alejandra-frontend:latest
+          ports: [{ containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /health, port: 8080 }, initialDelaySeconds: 3 }
+          livenessProbe: { httpGet: { path: /health, port: 8080 }, initialDelaySeconds: 10 }
+          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 256Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clinica-alejandra-frontend
+spec:
+  selector: { app: clinica-alejandra-frontend }
+  ports: [{ port: 8080, targetPort: 8080 }]
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: clinica-alejandra-frontend
+spec:
+  to: { kind: Service, name: clinica-alejandra-frontend }
+  port: { targetPort: 8080 }
+  tls: { termination: edge, insecureEdgeTerminationPolicy: Redirect }

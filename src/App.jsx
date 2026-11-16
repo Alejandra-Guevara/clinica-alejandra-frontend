@@ -1,122 +1,106 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Activity, AlertCircle, ArrowUpRight, BarChart3, Bell, BookOpen, CalendarDays, ChevronDown, ClipboardList, FileHeart, FlaskConical, HeartPulse, KeyRound, LayoutDashboard, LogOut, Mail, Menu, Pill, Plus, Search, Settings, ShieldCheck, Stethoscope, UserRound, Users, X } from 'lucide-react'
+import { Toaster, toast } from 'sonner'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
+import { resourceApi } from './api/resources'
+import api from './api/client'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+const ConsultationChart=lazy(()=>import('./components/ConsultationChart.jsx'))
+const ResourcePage=lazy(()=>import('./components/ResourcePage.jsx'))
+const PatientDetail=lazy(()=>import('./components/PatientDetail.jsx'))
+const resourceNames=['pacientes','medicos','especialidades','medico-especialidades','historias-clinicas','asignaciones-historia','alergias','paciente-alergias','antecedentes','paciente-antecedentes','consultas','diagnosticos','consulta-diagnosticos','signos-vitales','medicamentos','recetas','receta-detalles','examenes','ordenes-examen','orden-examen-detalles']
+const resourceFallback=<div className="inline-loading"><span className="spinner"/>Cargando módulo…</div>
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+const navGroups = [
+  { label:'GENERAL', items:[['/','Resumen',LayoutDashboard],['/portal','Mi historia',FileHeart]] },
+  { label:'PERSONAS', items:[['/pacientes','Pacientes',Users],['/medicos','Médicos',Stethoscope],['/especialidades','Especialidades',Activity],['/medico-especialidades','Asignar especialidad',Stethoscope]] },
+  { label:'ATENCIÓN CLÍNICA', items:[['/historias-clinicas','Historias clínicas',FileHeart],['/asignaciones-historia','Asignar médico',Stethoscope],['/consultas','Consultas',ClipboardList],['/signos-vitales','Signos vitales',HeartPulse],['/diagnosticos','Diagnósticos CIE-10',BookOpen]] },
+  { label:'CATÁLOGOS Y ÓRDENES', items:[['/alergias','Alergias',AlertCircle],['/paciente-alergias','Alergias por paciente',AlertCircle],['/antecedentes','Antecedentes',FileHeart],['/paciente-antecedentes','Antecedentes por paciente',FileHeart],['/medicamentos','Medicamentos',Pill],['/recetas','Recetas',ClipboardList],['/receta-detalles','Detalle de recetas',Pill],['/examenes','Exámenes',FlaskConical],['/ordenes-examen','Órdenes de exámenes',ClipboardList],['/orden-examen-detalles','Seguimiento de exámenes',FlaskConical]] },
+]
+const routeRoleAccess={
+  portal:['Paciente'],
+  'medico-especialidades':['Administrador','Personal administrativo'],
+  'asignaciones-historia':['Administrador','Personal administrativo'],
+  consultas:['Administrador','Médico'],diagnosticos:['Administrador','Médico'],'consulta-diagnosticos':['Administrador','Médico'],'signos-vitales':['Administrador','Médico'],medicamentos:['Administrador','Médico'],recetas:['Administrador','Médico'],'receta-detalles':['Administrador','Médico'],examenes:['Administrador','Médico'],'ordenes-examen':['Administrador','Médico'],'orden-examen-detalles':['Administrador','Médico'],
 }
 
-export default App
+function Login() {
+  const { login }=useAuth(), navigate=useNavigate(), [busy,setBusy]=useState(false)
+  const submit=async(e)=>{e.preventDefault();setBusy(true);const fd=new FormData(e.currentTarget);try{await login({email:fd.get('email'),password:fd.get('password')});navigate('/',{replace:true});toast.success('Bienvenido a Clínica Alejandra')}catch(err){toast.error(err.response?.data?.error?.message||'No fue posible iniciar sesión')}finally{setBusy(false)}}
+  return <main className="login-page"><div className="login-aside"><div className="brand"><div className="brand-mark"><HeartPulse size={22}/></div><span>Clínica <strong>Alejandra</strong></span></div><div className="login-message"><span className="eyebrow">CUIDADO CONFIABLE, SIEMPRE</span><h1>La salud merece<br/><em>una atención cercana.</em></h1><p>Un espacio seguro para acompañar cada historia y cada paso hacia el bienestar.</p><div className="login-feature"><ShieldCheck size={19}/><span>Información clínica protegida y acceso autorizado</span></div></div><div className="login-foot">Atención humana. Gestión segura.</div></div><section className="login-form-side"><form className="login-form" onSubmit={submit}><div className="form-symbol"><HeartPulse size={22}/></div><span className="eyebrow">PORTAL CLÍNICO</span><h2>Qué bueno verte.</h2><p>Ingresa tus credenciales para continuar.</p><label className="field">Correo electrónico<input name="email" type="email" autoComplete="username" placeholder="nombre@clinica.com" required/></label><label className="field">Contraseña<input name="password" type="password" autoComplete="current-password" placeholder="Tu contraseña" required/></label><button className="btn btn-primary login-submit" disabled={busy}>{busy?'Validando…':'Iniciar sesión'}</button><small>Si no tienes acceso, solicita una cuenta al administrador.</small></form></section></main>
+}
+
+function ContextSearch({ user }) {
+  const navigate=useNavigate(), client=useQueryClient(), [term,setTerm]=useState(''), [query,setQuery]=useState(''), [open,setOpen]=useState(false)
+  const patientOnly=user?.roles?.includes('Paciente')&&!user.roles.some((role)=>['Administrador','Personal administrativo','Médico'].includes(role))
+  useEffect(()=>{const timer=setTimeout(()=>setQuery(term.trim()),250);return()=>clearTimeout(timer)},[term])
+  const {data,isFetching}=useQuery({queryKey:['context-patient-search',query],queryFn:()=>resourceApi.list('pacientes',{search:query,limit:5,audit:'true'}),enabled:!patientOnly&&query.length>=2,staleTime:15000})
+  if(patientOnly)return null
+  const results=data?.data||[]
+  const go=(value)=>{client.invalidateQueries({queryKey:['resource','pacientes']});navigate(`/pacientes?search=${encodeURIComponent(value)}`);setOpen(false);setTerm('')}
+  return <div className="context-search"><Search size={16}/><input aria-label="Buscar pacientes" placeholder="Buscar pacientes…" value={term} onFocus={()=>setOpen(true)} onChange={(event)=>{setTerm(event.target.value);setOpen(true)}} onKeyDown={(event)=>{if(event.key==='Enter'&&term.trim().length>=2)go(term.trim());if(event.key==='Escape')setOpen(false)}}/><button type="button" aria-label="Ir a búsqueda" onClick={()=>term.trim().length>=2&&go(term.trim())}><Search size={15}/></button>{open&&term.trim().length>=2&&<div className="context-search-results" role="listbox">{isFetching?<div className="context-search-empty">Buscando…</div>:results.length?results.map((patient)=><button type="button" role="option" key={patient.id_paciente} onMouseDown={(event)=>event.preventDefault()} onClick={()=>go(patient.numero_documento||`${patient.nombres} ${patient.apellidos}`)}><strong>{patient.nombres} {patient.apellidos}</strong><span>{patient.tipo_documento} {patient.numero_documento}</span></button>):<div className="context-search-empty">Sin coincidencias</div>}</div>}</div>
+}
+
+function Shell() {
+  const {user,logout}=useAuth(), location=useLocation(), navigate=useNavigate(), [mobile,setMobile]=useState(false), [profile,setProfile]=useState(false)
+  const current=navGroups.flatMap((group)=>group.items).find((item)=>item[0]===location.pathname)?.[1]||'Resumen'
+  const initials=`${user?.nombres?.[0]||''}${user?.apellidos?.[0]||''}`.toUpperCase()
+  const handleLogout=async()=>{try{await logout();navigate('/login',{replace:true})}catch{toast.error('No se pudo cerrar la sesión')}}
+  return <div className="app-shell"><aside className={`sidebar ${mobile?'sidebar-open':''}`}><div className="brand"><div className="brand-mark"><HeartPulse size={21}/></div><span>Clínica <strong>Alejandra</strong></span><button className="mobile-close" onClick={()=>setMobile(false)} aria-label="Cerrar menú"><X size={19}/></button></div><div className="clinic-switch"><div className="clinic-avatar">CA</div><div><strong>Clínica Alejandra</strong><span>Centro médico</span></div><ChevronDown size={15}/></div><nav>{navGroups.map((group)=><div className="nav-group" key={group.label}><span className="nav-label">{group.label}</span>{group.items.filter(([path])=>(!user?.roles?.includes('Paciente')||user.roles.some((role)=>['Administrador','Personal administrativo','M\u00e9dico'].includes(role))||path==='/'||path==='/portal')&&(!routeRoleAccess[path.slice(1)]||routeRoleAccess[path.slice(1)].some((role)=>user?.roles?.includes(role)))).map(([path,label,Icon])=><Link key={path} to={path} onClick={()=>setMobile(false)} className={`nav-link ${location.pathname===path?'active':''}`}><Icon size={17}/><span>{label}</span>{label==='Consultas'&&<i className="nav-dot"/>}</Link>)}</div>)}{user?.roles?.includes('Administrador')&&<div className="nav-group"><span className="nav-label">ADMINISTRACIÓN</span><Link to="/auditoria-accesos" onClick={()=>setMobile(false)} className={`nav-link ${location.pathname==='/auditoria-accesos'?'active':''}`}><ShieldCheck size={17}/><span>Auditoría</span></Link><Link to="/usuarios" onClick={()=>setMobile(false)} className="nav-link"><Users size={17}/><span>Usuarios</span></Link><Link to="/roles" onClick={()=>setMobile(false)} className="nav-link"><Settings size={17}/><span>Roles</span></Link></div>}</nav><div className="sidebar-bottom"><div className="support-card"><div className="support-icon"><HeartPulse size={18}/></div><strong>¿Necesitas ayuda?</strong><span>Contacta al equipo administrador.</span></div><div className="sidebar-user"><div className="avatar">{initials}</div><div className="user-meta"><strong>{user?.nombres} {user?.apellidos}</strong><span>{user?.roles?.[0]||'Usuario'}</span></div><button className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={handleLogout}><LogOut size={16}/></button></div></div></aside>{mobile&&<button className="mobile-scrim" onClick={()=>setMobile(false)} aria-label="Cerrar menú"/>}<main className="main-area"><header className="topbar"><div className="topbar-left"><button className="mobile-menu" aria-label="Abrir menú" onClick={()=>setMobile(true)}><Menu size={20}/></button><div className="breadcrumb"><span>Clínica Alejandra</span><span className="crumb-separator">/</span><strong>{current}</strong></div></div><div className="topbar-actions"><ContextSearch user={user}/><div className="secure-indicator"><span/>Sesión segura</div><button className="icon-button notification" aria-label="Notificaciones" onClick={()=>toast.info('Las notificaciones no están habilitadas en el esquema actual')}><Bell size={18}/></button><div className="profile-wrap"><button className="profile-button" onClick={()=>setProfile(!profile)}><div className="avatar avatar-small">{initials}</div><span>{user?.nombres?.split(' ')[0]}</span><ChevronDown size={14}/></button>{profile&&<div className="profile-menu"><div className="profile-menu-head"><strong>{user?.nombres} {user?.apellidos}</strong><span>{user?.email}</span></div><Link to="/perfil" onClick={()=>setProfile(false)}><UserRound size={15}/>Mi perfil</Link><button onClick={handleLogout}><LogOut size={15}/>Cerrar sesión</button></div>}</div></div></header><div className="content-area"><Outlet/></div><footer className="app-footer"><span>© {new Date().getFullYear()} Clínica Alejandra</span><span>Información confidencial · Acceso registrado</span></footer></main></div>
+}
+
+function Dashboard() {
+  const {user}=useAuth(), {data,isLoading,isError}=useQuery({queryKey:['dashboard'],queryFn:resourceApi.dashboard,refetchInterval:60000})
+  const cards=[['Pacientes registrados',data?.totalPacientes,Users,'blue'],['Médicos activos',data?.medicosActivos,Stethoscope,'mint'],['Consultas realizadas',data?.totalConsultas,ClipboardList,'purple'],['Consultas de hoy',data?.consultasHoy,CalendarDays,'amber']]
+  return <><div className="page-heading dash-heading"><div><span className="eyebrow">{new Intl.DateTimeFormat('es-CO',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'America/Bogota'}).format(new Date()).toUpperCase()}</span><h1>Buenos días, {user?.nombres?.split(' ')[0]} <span className="wave">✦</span></h1><p>Este es el resumen de actividad de tu clínica.</p></div><div className="live-pill"><span/>Datos en tiempo real</div></div>{isError&&<div className="notice notice-error">No se pudo conectar con la API. Verifica el backend y la conexión a MySQL.</div>}<div className="metric-grid">{cards.map(([title,value,Icon,color],i)=><article className="metric-card" key={title}><div className="metric-top"><span className={`metric-icon ${color}`}><Icon size={19}/></span><span className="metric-change"><ArrowUpRight size={14}/> Actual</span></div><div className="metric-value">{isLoading?<span className="skeleton"/>:value??'—'}</div><div className="metric-label">{title}</div><div className="metric-foot">{['Registro acumulado','Equipo disponible','Histórico general','Zona horaria Colombia'][i]}</div></article>)}</div><div className="dashboard-grid"><section className="panel chart-panel"><div className="panel-heading"><div><h2>Actividad de consultas</h2><p>Atenciones de los últimos seis meses</p></div><span className="chart-legend"><i/> Consultas</span></div>{data?.consultasPorPeriodo?.length?<Suspense fallback={<div className="chart-empty"><span className="spinner"/>Preparando gráfico…</div>}><ConsultationChart data={data.consultasPorPeriodo}/></Suspense>:<div className="chart-empty"><BarChart3 size={25}/><strong>Sin actividad todavía</strong><span>El gráfico se actualizará con consultas reales.</span></div>}</section><section className="panel status-panel"><div className="panel-heading"><div><h2>Estado de consultas</h2><p>Distribución total registrada</p></div><div className="round-icon"><Activity size={17}/></div></div><div className="status-list">{(data?.consultasPorEstado||[]).map(({estado,total})=><div className="status-row" key={estado}><div className="status-row-label"><i className={`state-dot dot-${estado}`}/><span>{estado.replaceAll('_',' ')}</span><strong>{total}</strong></div><div className="progress-track"><i className={`progress-${estado}`} style={{width:`${data.totalConsultas?Math.max(total/data.totalConsultas*100,4):0}%`}}/></div></div>)}{!data?.consultasPorEstado?.length&&!isLoading&&<div className="soft-empty">No hay consultas registradas.</div>}</div><div className="status-note"><ShieldCheck size={16}/><span>Los datos visibles respetan tu perfil de acceso.</span></div></section></div><section className="panel recent-panel"><div className="panel-heading"><div><h2>Consultas recientes</h2><p>Atenciones recientes a las que tienes acceso</p></div><Link to="/consultas" className="link-button">Ver consultas <ArrowUpRight size={15}/></Link></div>{data?.consultasRecientes?.length?<div className="table-scroll"><table><thead><tr><th>Paciente</th><th>Fecha y hora</th><th>Tipo</th><th>Estado</th><th/></tr></thead><tbody>{data.consultasRecientes.map((row)=><tr key={row.id_consulta}><td><div className="patient-cell"><span className="avatar patient-avatar">{row.nombres?.[0]}{row.apellidos?.[0]}</span><strong>{row.nombres} {row.apellidos}</strong></div></td><td>{new Intl.DateTimeFormat('es-CO',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Bogota'}).format(new Date(row.fecha_hora))}</td><td>{row.tipo_consulta?.replaceAll('_',' ')}</td><td><span className={`status status-${row.estado}`}>{row.estado}</span></td><td><Link className="text-action" to="/consultas">Abrir</Link></td></tr>)}</tbody></table></div>:<div className="empty-state compact"><div className="empty-icon"><ClipboardList size={21}/></div><strong>{isLoading?'Cargando actividad…':'No hay consultas recientes'}</strong><span>Cuando se registren atenciones aparecerán aquí.</span></div>}</section></>
+}
+
+function PatientPortal(){
+ const {user}=useAuth(),[showRecord,setShowRecord]=useState(false)
+ const {data,isLoading,isError}=useQuery({queryKey:['patient-portal'],queryFn:async()=>{const {data}=await api.get('/pacientes/portal/me');return data.data.patient}})
+ return <><div className="page-heading"><div><span className="eyebrow">PORTAL DEL PACIENTE</span><h1>Mi historia de salud</h1><p>Consulta la información clínica registrada para ti.</p></div></div>{isLoading&&<div className="inline-loading"><span className="spinner"/>Cargando tu información…</div>}{isError&&<div className="notice notice-error">No se pudo cargar tu perfil. Solicita al equipo de la clínica que vincule tu cuenta.</div>}{data&&<section className="panel profile-card"><div className="profile-card-top"><span className="avatar profile-avatar">{`${data.nombres?.[0]||''}${data.apellidos?.[0]||''}`.toUpperCase()}</span><div><h2>{data.nombres} {data.apellidos}</h2><span>{data.tipo_documento} · {data.numero_documento}</span></div></div><div className="profile-line"><UserRound size={16}/><div><small>Correo de acceso</small><strong>{user?.email}</strong></div></div><button className="btn btn-primary" onClick={()=>setShowRecord(true)}>Ver mi historia clínica</button></section>}{showRecord&&data&&<Suspense fallback={resourceFallback}><PatientDetail patient={data} user={user} onClose={()=>setShowRecord(false)}/></Suspense>}</>
+}
+function ProfilePage(){const {user,logout}=useAuth(),navigate=useNavigate(),[busy,setBusy]=useState(false);const submit=async(e)=>{e.preventDefault();const fd=new FormData(e.currentTarget);if(fd.get('newPassword')!==fd.get('confirmPassword')){toast.error('Las contraseñas nuevas no coinciden');return}setBusy(true);try{await api.patch('/auth/password',{currentPassword:fd.get('currentPassword'),newPassword:fd.get('newPassword')});toast.success('Contraseña actualizada. Inicia sesión de nuevo.');await logout();navigate('/login',{replace:true})}catch(error){toast.error(error.response?.data?.error?.message||'No se pudo cambiar la contraseña')}finally{setBusy(false)}};return <><div className="page-heading"><div><span className="eyebrow">CUENTA</span><h1>Mi perfil</h1><p>Información de tu cuenta y seguridad de acceso.</p></div></div><div className="profile-grid"><section className="panel profile-card"><div className="profile-card-top"><span className="avatar profile-avatar">{`${user?.nombres?.[0]||''}${user?.apellidos?.[0]||''}`.toUpperCase()}</span><div><h2>{user?.nombres} {user?.apellidos}</h2><span>{user?.roles?.join(' · ')||'Usuario'}</span></div></div><div className="profile-line"><Mail size={16}/><div><small>Correo de acceso</small><strong>{user?.email}</strong></div></div><div className="profile-line"><ShieldCheck size={16}/><div><small>Estado de cuenta</small><strong>Activa</strong></div></div></section><section className="panel password-card"><div className="panel-heading"><div><h2>Cambiar contraseña</h2><p>Se cerrará esta sesión después del cambio.</p></div><div className="round-icon"><KeyRound size={17}/></div></div><form onSubmit={submit} className="password-form"><label className="field">Contraseña actual<input name="currentPassword" type="password" autoComplete="current-password" required/></label><label className="field">Nueva contraseña<input name="newPassword" type="password" minLength="12" autoComplete="new-password" required/><small>Usa 12 caracteres o más.</small></label><label className="field">Confirmar nueva contraseña<input name="confirmPassword" type="password" minLength="12" autoComplete="new-password" required/></label><button className="btn btn-primary" disabled={busy}>{busy?'Actualizando…':'Actualizar contraseña'}</button></form></section></div></>}
+function Denied({notFound=false}) { return <div className="error-page"><div className="error-icon"><ShieldCheck size={25}/></div><span className="eyebrow">{notFound?'PÁGINA NO ENCONTRADA':'ACCESO RESTRINGIDO'}</span><h1>{notFound?'No encontramos esa página':'No tienes acceso a esta sección'}</h1><p>{notFound?'La dirección puede haber cambiado o no existe.':'Tu perfil no tiene permisos para consultar este módulo.'}</p><Link className="btn btn-primary" to="/">Volver al resumen</Link></div> }
+
+function AppRoutes() {
+  const {user}=useAuth()
+  return <Routes>
+    <Route path="/login" element={user?<Navigate to="/" replace/>:<Login/>}/>
+    <Route element={<ProtectedRoute/>}><Route element={<Shell/>}>
+      <Route index element={user?.roles?.includes('Paciente')?<Navigate to="/portal" replace/>:<Dashboard/>}/>
+      <Route path="portal" element={user?.roles?.includes('Paciente')?<PatientPortal/>:<Denied/>}/>
+      {resourceNames.map((key)=><Route key={key} path={key} element={((user?.roles?.includes('Paciente')&&!user.roles.some((role)=>['Administrador','Personal administrativo','M\u00e9dico'].includes(role)))||(routeRoleAccess[key]&&!routeRoleAccess[key].some((role)=>user?.roles?.includes(role))))?<Denied/>:<Suspense fallback={resourceFallback}><ResourcePage resource={key}/></Suspense>}/>)}
+      <Route path="auditoria-accesos" element={user?.roles?.includes('Administrador')?<Suspense fallback={resourceFallback}><ResourcePage resource="auditoria-accesos"/></Suspense>:<Denied/>}/>
+      <Route path="usuarios" element={user?.roles?.includes('Administrador')?<UserAdmin/>:<Denied/>}/>
+      <Route path="roles" element={user?.roles?.includes('Administrador')?<RoleList/>:<Denied/>}/>
+      <Route path="perfil" element={<ProfilePage/>}/>
+    </Route></Route>
+    <Route path="403" element={<Denied/>}/><Route path="*" element={<Denied notFound/>}/>
+  </Routes>
+}
+function UserAdmin(){
+ const client=useQueryClient(),[editing,setEditing]=useState(null),[search,setSearch]=useState(''),[page,setPage]=useState(1)
+ const {data:result,isLoading}=useQuery({queryKey:['users',search,page],queryFn:async()=>{const {data}=await api.get('/usuarios',{params:{search,page,limit:10}});return data}})
+ const data=result?.data||[],meta=result?.meta||{page,limit:10,total:data.length}
+ const {data:roles=[]}=useQuery({queryKey:['roles'],queryFn:async()=>{const {data}=await api.get('/roles');return data.data}})
+ const save=useMutation({mutationFn:({id,payload})=>id?api.put(`/usuarios/${id}`,payload):api.post('/usuarios',payload),onSuccess:()=>{toast.success('Usuario guardado');client.invalidateQueries({queryKey:['users']});setEditing(null)},onError:(e)=>toast.error(e.response?.data?.error?.message||'No se pudo guardar el usuario')})
+ const submit=(e)=>{e.preventDefault();const fd=new FormData(e.currentTarget),payload={nombres:fd.get('nombres'),apellidos:fd.get('apellidos'),email:fd.get('email'),roles:fd.getAll('roles')};if(editing?.id_usuario)payload.estado=fd.get('estado');else payload.password=fd.get('password');save.mutate({id:editing?.id_usuario,payload})}
+ return <><div className="page-heading"><div><span className="eyebrow">ADMINISTRACIÓN</span><h1>Usuarios</h1><p>Cuentas y permisos de acceso.</p></div><button className="btn btn-primary" onClick={()=>setEditing({})}><Plus size={16}/>Crear usuario</button></div><section className="panel"><div className="table-toolbar"><label className="searchbox"><input aria-label="Buscar usuarios" placeholder="Buscar por nombre, correo o estado" value={search} onChange={(event)=>{setSearch(event.target.value);setPage(1)}}/></label><span className="result-count">{meta.total} usuarios</span></div><div className="table-scroll"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Estado</th><th>Roles</th><th>Acciones</th></tr></thead><tbody>{(data||[]).map((u)=><tr key={u.id_usuario}><td>{u.nombres} {u.apellidos}</td><td>{u.email}</td><td><span className={`status status-${u.estado}`}>{u.estado}</span></td><td>{u.roles||'—'}</td><td><button className="text-action" onClick={()=>setEditing(u)}>Editar</button></td></tr>)}</tbody></table></div>{isLoading&&<div className="inline-loading">Cargando usuarios…</div>}{!isLoading&&!data?.length&&<div className="empty-state">Aún no hay usuarios.</div>}</section><div className="pagination"><span>P?gina {meta.page} de {Math.max(1,Math.ceil(meta.total/meta.limit))}</span><div><button className="btn btn-subtle" disabled={page<=1} onClick={()=>setPage((value)=>value-1)}>Anterior</button><button className="btn btn-subtle" disabled={page>=Math.ceil(meta.total/meta.limit)} onClick={()=>setPage((value)=>value+1)}>Siguiente</button></div></div>{editing&&<div className="modal-backdrop"><section className="modal-card"><header><div><span className="eyebrow">ADMINISTRACIÓN</span><h2>{editing.id_usuario?'Editar usuario':'Crear usuario'}</h2></div><button className="icon-button" onClick={()=>setEditing(null)} aria-label="Cerrar"><X size={18}/></button></header><form onSubmit={submit}><div className="form-grid"><label className="field">Nombres<input name="nombres" defaultValue={editing.nombres||''} maxLength="100" required/></label><label className="field">Apellidos<input name="apellidos" defaultValue={editing.apellidos||''} maxLength="100" required/></label><label className="field wide">Correo electrónico<input name="email" type="email" defaultValue={editing.email||''} required/></label>{!editing.id_usuario&&<label className="field wide">Contraseña inicial<input name="password" type="password" minLength="12" required/><small>Usa al menos 12 caracteres.</small></label>}{editing.id_usuario&&<label className="field">Estado<select name="estado" defaultValue={editing.estado}><option value="activo">Activo</option><option value="inactivo">Inactivo</option><option value="bloqueado">Bloqueado</option></select></label>}<label className="field wide">Roles asignados<select name="roles" multiple required defaultValue={editing.roles?editing.roles.split(','):[]} size={Math.min(roles.length,4)||1}>{roles.map((role)=><option key={role.id_rol} value={role.nombre}>{role.nombre}</option>)}</select><small>Mantén Ctrl/Cmd para seleccionar varios roles.</small></label></div><footer><button type="button" className="btn btn-subtle" onClick={()=>setEditing(null)}>Cancelar</button><button className="btn btn-primary" disabled={save.isPending}>{save.isPending?'Guardando…':'Guardar usuario'}</button></footer></form></section></div>}</>
+}
+function RoleList(){
+ const client=useQueryClient(),[editing,setEditing]=useState(null),[pendingDelete,setPendingDelete]=useState(null)
+ const {data,isLoading}=useQuery({queryKey:['roles'],queryFn:async()=>{const {data}=await api.get('/roles');return data.data}})
+ const save=useMutation({mutationFn:({id,payload})=>id?api.put(`/roles/${id}`,payload):api.post('/roles',payload),onSuccess:()=>{toast.success('Rol guardado');client.invalidateQueries({queryKey:['roles']});setEditing(null)},onError:(e)=>toast.error(e.response?.data?.error?.message||'No se pudo guardar el rol')})
+ const remove=useMutation({mutationFn:(id)=>api.delete(`/roles/${id}`),onSuccess:()=>{toast.success('Rol eliminado');client.invalidateQueries({queryKey:['roles']});setPendingDelete(null)},onError:(e)=>toast.error(e.response?.data?.error?.message||'No se puede eliminar un rol asignado')})
+ const submit=(e)=>{e.preventDefault();const fd=new FormData(e.currentTarget);save.mutate({id:editing?.id_rol,payload:{nombre:fd.get('nombre'),descripcion:fd.get('descripcion')||undefined}})}
+ return <><div className="page-heading"><div><span className="eyebrow">ADMINISTRACIÓN</span><h1>Roles y permisos</h1><p>Perfiles y descripciones configurados en la base de datos.</p></div><button className="btn btn-primary" onClick={()=>setEditing({})}><Plus size={16}/>Crear rol</button></div><section className="panel"><div className="table-scroll"><table><thead><tr><th>Rol</th><th>Descripción</th><th>Acciones</th></tr></thead><tbody>{data?.map((role)=><tr key={role.id_rol}><td>{role.nombre}</td><td>{role.descripcion||'—'}</td><td><button className="text-action" onClick={()=>setEditing(role)}>Editar</button>{!['Administrador','Médico','Personal administrativo','Paciente'].includes(role.nombre)&&<button className="text-action" onClick={()=>setPendingDelete(role)}>Eliminar</button>}</td></tr>)}</tbody></table></div>{isLoading&&<div className="inline-loading">Cargando roles…</div>}</section>{editing&&<div className="modal-backdrop"><section className="modal-card"><header><div><span className="eyebrow">ADMINISTRACIÓN</span><h2>{editing.id_rol?'Editar rol':'Crear rol'}</h2></div><button className="icon-button" aria-label="Cerrar" onClick={()=>setEditing(null)}><X size={18}/></button></header><form onSubmit={submit}><div className="form-grid"><label className="field wide">Nombre<input name="nombre" maxLength="50" defaultValue={editing.nombre||''} readOnly={['Administrador','Médico','Personal administrativo','Paciente'].includes(editing.nombre)} required/></label><label className="field wide">Descripción<textarea name="descripcion" rows="3" maxLength="255" defaultValue={editing.descripcion||''}/></label></div><footer><button type="button" className="btn btn-subtle" onClick={()=>setEditing(null)}>Cancelar</button><button className="btn btn-primary" disabled={save.isPending}>{save.isPending?'Guardando…':'Guardar rol'}</button></footer></form></section></div>}{pendingDelete&&<div className="modal-backdrop"><section className="modal-card confirm-card"><header><div><span className="eyebrow">CONFIRMAR ELIMINACIÓN</span><h2>Eliminar rol {pendingDelete.nombre}</h2></div><button className="icon-button" aria-label="Cerrar" onClick={()=>setPendingDelete(null)}><X size={18}/></button></header><p>La base de datos impedirá eliminarlo mientras esté asignado a una cuenta.</p><footer><button className="btn btn-subtle" onClick={()=>setPendingDelete(null)}>Cancelar</button><button className="btn btn-danger" disabled={remove.isPending} onClick={()=>remove.mutate(pendingDelete.id_rol)}>Eliminar rol</button></footer></section></div>}</>
+}
+
+export default function App() {
+  return <BrowserRouter><AuthProvider><AppRoutes/><Toaster position="top-right" richColors/></AuthProvider></BrowserRouter>
+}
