@@ -4,7 +4,7 @@ Aplicación React/Vite conectada a la API independiente `../clinica-alejandra-ba
 
 ## Ejecución local
 
-Requiere Node 22. Configure MySQL/XAMPP e inicie el backend primero. Copie `.env.example` a `.env`, ajuste `VITE_API_URL` si la API no está en `http://localhost:3000/api`, y ejecute:
+Requiere Node 22. Configure MySQL/XAMPP e inicie el backend primero. La API local se conecta mediante el proxy de Vite a `http://localhost:3000`, sin .env. Ejecute:
 
 ```bash
 npm install
@@ -31,9 +31,9 @@ El backend requiere una base previamente preparada. El archivo SQL llama a la ba
 
 ## OpenShift
 
-El procedimiento vigente está en [deploy/README.md](deploy/README.md). El YAML [deploy/redhat-completo.yaml](deploy/redhat-completo.yaml) construye los dos repositorios desde GitHub, reutiliza el backend Knative existente y publica el frontend en HTTPS. El script de despliegue comprueba los Secrets, espera la revisión nueva y valida la conexión por `/api/health`.
+La demostración usa configuración integrada: API `/api` e indicador demo en `src/config/demo.js`, sin archivos .env ni argumentos de build. Nginx envía las solicitudes al único backend del proyecto.
 
-El frontend usa `/api` y Nginx conserva el mismo origen para cookies y CSRF. El Service interno `clinica-alejandra-api:3000` envía al backend Knative en 8080. El ConfigMap incluye `FRONTEND_URL`, `DB_SSL=true` y la ubicación del MySQL existente. Confirma DB_NAME, las credenciales y TLS antes de desplegar. La carga de datos local y las migraciones no se importan al clúster con un push.
+Consulta [deploy/README.md](deploy/README.md). El [YAML completo](deploy/redhat-completo.yaml) se aplica explícitamente mediante el script `deploy/deploy-redhat.sh`, que retira las referencias antiguas a Secrets/env del servicio y construye ambos repositorios desde GitHub. Importar desde Git no aplica los YAML automáticamente. El script comprueba el arranque y la conexión real de MySQL; no modifica tablas ni crea cuentas de base de datos.
 ## GitHub
 
-Frontend: https://github.com/Alejandra-Guevara/clinica-alejandra-frontend. Backend: https://github.com/Alejandra-Guevara/clinica-alejandra-backend. Los Secrets, contraseñas y archivos .env quedan fuera de Git.
+Frontend: https://github.com/Alejandra-Guevara/clinica-alejandra-frontend. Backend: https://github.com/Alejandra-Guevara/clinica-alejandra-backend. La configuración de demostración del backend contiene credenciales públicas por petición de la propietaria; no se debe reutilizar para datos o servicios reales.

@@ -21,11 +21,6 @@ spec:
     type: Docker
     dockerStrategy:
       dockerfilePath: Dockerfile
-      buildArgs:
-        - name: VITE_API_URL
-          value: /api
-        - name: VITE_DEMO_MODE
-          value: "true"
   output:
     to:
       kind: ImageStreamTag

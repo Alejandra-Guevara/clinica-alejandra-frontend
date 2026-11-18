@@ -3,9 +3,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-ARG VITE_API_URL=/api
-ARG VITE_DEMO_MODE=false
-ENV VITE_API_URL=$VITE_API_URL VITE_DEMO_MODE=$VITE_DEMO_MODE
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine

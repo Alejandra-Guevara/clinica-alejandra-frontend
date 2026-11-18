@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ejecutar en la terminal >_ de OpenShift. No contiene ni solicita contraseñas.
+# Ejecutar en la terminal >_ de OpenShift. Demostración sin Secrets ni env manuales.
 set -euo pipefail
 
 project=maria-guevara-rio-dev
@@ -9,13 +9,11 @@ manifest=https://raw.githubusercontent.com/Alejandra-Guevara/clinica-alejandra-f
 
 oc whoami >/dev/null
 oc project "$project" >/dev/null
-for key in SESSION_SECRET DB_USER DB_PASSWORD; do
-  present=$(oc get secret clinica-alejandra-backend-secret -n "$project" -o "go-template={{if index .data \"$key\"}}yes{{end}}")
-  if [[ "$present" != yes ]]; then
-    printf 'Falta %s en Secrets > clinica-alejandra-backend-secret. Agrégala y vuelve a ejecutar.\n' "$key" >&2
-    exit 1
-  fi
-done
+# Limpia la configuración vieja del servicio real, no solo el archivo de GitHub.
+# Así ningún Secret ausente puede bloquear el arranque antes de ejecutar Node.
+if oc get ksvc "$backend" -n "$project" >/dev/null 2>&1; then
+  oc patch ksvc "$backend" -n "$project" --type=json -p '[{"op":"add","path":"/spec/template/spec/containers/0/env","value":[]},{"op":"add","path":"/spec/template/spec/containers/0/envFrom","value":[]},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts","value":[]},{"op":"add","path":"/spec/template/spec/volumes","value":[]}]'
+fi
 
 printf 'Aplicando el YAML de ambos repositorios en %s...\n' "$project"
 # Algunas importaciones anteriores usan S2I. Cambiar la estrategia completa evita
@@ -51,7 +49,7 @@ if ! oc wait ksvc/"$backend" -n "$project" --for="jsonpath={.status.observedGene
   || ! oc wait ksvc/"$backend" -n "$project" --for=condition=Ready --timeout=240s; then
   oc get ksvc "$backend" -n "$project" -o jsonpath='{.status.conditions}{"\n"}'
   oc logs -n "$project" -l "serving.knative.dev/service=$backend" -c "$backend" --tail=60 || true
-  printf 'Revisa DB_NAME, las credenciales y TLS de MySQL. DB_SSL=true no habilita TLS en el servidor MySQL.\n' >&2
+  printf 'Revisa el código del error MySQL en los logs. La conexión de demostración está en src/config/demo.js del backend.\n' >&2
   exit 1
 fi
 # El proxy envía tráfico únicamente a la revisión lista, incluso durante futuros despliegues.

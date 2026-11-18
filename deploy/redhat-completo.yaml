@@ -1,7 +1,5 @@
-# YAML completo para el proyecto maria-guevara-rio-dev. No contiene secretos.
-# Reutiliza el único backend ya creado como servicio Knative.
-# Requiere el Secret existente clinica-alejandra-backend-secret con
-# SESSION_SECRET, DB_USER y DB_PASSWORD. No recrea ni publica ese Secret.
+# Demostración integrada para maria-guevara-rio-dev; sin env ni Secrets manuales.
+# Demostración integrada: reutiliza el backend existente sin env ni Secrets manuales.
 apiVersion: image.openshift.io/v1
 kind: ImageStream
 metadata:
@@ -31,22 +29,6 @@ spec:
   triggers:
     - type: ConfigChange
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: clinica-alejandra-api-config
-  namespace: maria-guevara-rio-dev
-data:
-  NODE_ENV: production
-  DB_HOST: historia-clinica-db
-  DB_PORT: "3306"
-  # Cambiar si el esquema creado por historia-clinica-db-init tiene otro nombre.
-  DB_NAME: clinica-alejandra
-  DB_SSL: "true"
-  FRONTEND_URL: https://clinica-alejandra-frontend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com
-  COOKIE_SECURE: "true"
-  TRUST_PROXY: "2"
----
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
@@ -67,64 +49,9 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
-          envFrom:
-            - configMapRef:
-                name: clinica-alejandra-api-config
-            - secretRef:
-                name: clinica-alejandra-backend-secret
-          env:
-            - name: SESSION_SECRET
-              value: ""
-              valueFrom:
-                secretKeyRef:
-                  name: clinica-alejandra-backend-secret
-                  key: SESSION_SECRET
-            - name: DB_USER
-              value: ""
-              valueFrom:
-                secretKeyRef:
-                  name: clinica-alejandra-backend-secret
-                  key: DB_USER
-            - name: DB_PASSWORD
-              value: ""
-              valueFrom:
-                secretKeyRef:
-                  name: clinica-alejandra-backend-secret
-                  key: DB_PASSWORD
-            - name: DB_HOST
-              value: ""
-              valueFrom:
-                configMapKeyRef:
-                  name: clinica-alejandra-api-config
-                  key: DB_HOST
-            - name: DB_PORT
-              value: ""
-              valueFrom:
-                configMapKeyRef:
-                  name: clinica-alejandra-api-config
-                  key: DB_PORT
-            - name: DB_NAME
-              value: ""
-              valueFrom:
-                configMapKeyRef:
-                  name: clinica-alejandra-api-config
-                  key: DB_NAME
-            - name: DB_SSL
-              value: ""
-              valueFrom:
-                configMapKeyRef:
-                  name: clinica-alejandra-api-config
-                  key: DB_SSL
-            - name: FRONTEND_URL
-              value: ""
-              valueFrom:
-                configMapKeyRef:
-                  name: clinica-alejandra-api-config
-                  key: FRONTEND_URL
-          volumeMounts:
-            - name: mysql-ca
-              mountPath: /etc/mysql-ca
-              readOnly: true
+          env: []
+          envFrom: []
+          volumeMounts: []
           readinessProbe:
             httpGet:
               path: /api/health
@@ -152,11 +79,7 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-      volumes:
-        - name: mysql-ca
-          secret:
-            secretName: clinica-alejandra-db-ca
-            optional: true
+      volumes: []
   traffic:
     - latestRevision: true
       percent: 100
@@ -185,11 +108,6 @@ spec:
     type: Docker
     dockerStrategy:
       dockerfilePath: Dockerfile
-      buildArgs:
-        - name: VITE_API_URL
-          value: /api
-        - name: VITE_DEMO_MODE
-          value: "true"
   output:
     to:
       kind: ImageStreamTag
