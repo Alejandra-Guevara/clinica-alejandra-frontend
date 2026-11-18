@@ -1,37 +1,36 @@
-# Demostración universitaria en Red Hat
+# Frontend conectado al backend existente
 
-El backend y el frontend tienen configuración integrada. No necesitas crear variables de entorno, Secrets, ConfigMaps ni argumentos de build. Solo se respetan los datos de puerto y detección de clúster que OpenShift inyecta automáticamente.
+Backend informado por la propietaria:
 
-Backend: `src/config/demo.js` del repositorio backend contiene host `historia-clinica-db`, puerto 3306, esquema `clinica-alejandra`, el usuario y la contraseña de demostración proporcionados por la propietaria. Esa cuenta debe existir en MySQL y tener permisos sobre el esquema. Incluirla en el código no crea la cuenta en MySQL. El correo y contraseña de login de la aplicación solo sirven para conectar a MySQL si también se ha creado allí esa cuenta. La contraseña del administrador de la aplicación no se modifica.
+`https://clinica-alejandra-backend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com`
 
-Las credenciales integradas quedan visibles en el repositorio público por petición expresa para esta demostración. No reutilizar esta configuración con servicios reales. La conexión al MySQL interno de la demostración no exige TLS. La firma de sesiones se genera en memoria sin Secret; al reiniciar el backend hay que iniciar sesión de nuevo. Se mantiene una sola instancia de la API.
+React sigue usando `/api`. El archivo `nginx.conf` reenvía esas solicitudes a la Route HTTPS anterior, conserva el recorrido `/api/...`, envía el Host y SNI adecuados y verifica el certificado con las CA de la imagen. No se coloca `/api/health` como URL base de las llamadas: esa dirección sirve solo para comprobar MySQL.
 
-Frontend: `src/config/demo.js` define `/api` y el indicador de datos sintéticos. Nginx conecta con el backend por el Service `clinica-alejandra-api:3000`, que envía al puerto 8080 del único servicio Knative existente. Vite incluye un proxy local a localhost:3000, sin archivo .env.
+Las cookies siguen siendo del mismo origen del frontend; no se requieren variables de entorno ni cambios en el código del backend. El Dockerfile instala el paquete de certificados CA y compila el frontend con la configuración integrada de `src/config/demo.js`. Vite conserva su proxy local a localhost:3000.
 
-## Aplicar YAML y reconstruir desde GitHub
+## Desplegar o reconstruir SOLO el frontend
 
-Importar un repositorio Git solo construye su Dockerfile: Red Hat no aplica automáticamente los YAML de la carpeta deploy. El siguiente script aplica `deploy/redhat-completo.yaml`, limpia las referencias antiguas a Secrets/env del servicio real y reconstruye ambos repositorios:
+En la terminal `>_` de OpenShift:
 
 ```bash
 curl -fsS https://raw.githubusercontent.com/Alejandra-Guevara/clinica-alejandra-frontend/main/deploy/deploy-redhat.sh -o /tmp/deploy-clinica.sh
 bash /tmp/deploy-clinica.sh
 ```
 
-Ejecuta las dos líneas en la terminal `>_` de OpenShift, con sesión iniciada. El proyecto es `maria-guevara-rio-dev`. El script actualiza el servicio Knative `clinica-alejandra-backend-git` y el Deployment `clinica-alejandra-frontend`; no crea otro backend ni otra base, no importa tablas ni elimina datos. Los Secrets antiguos pueden quedarse almacenados: la aplicación ya no los referencia.
+El script aplica `deploy/openshift-frontend.yaml`, construye este repositorio con Dockerfile y actualiza el Deployment `clinica-alejandra-frontend` usando la imagen construida. No aplica manifiestos backend, no crea otra API y no cambia MySQL. No exige que el backend anterior con nombre `clinica-alejandra-backend-git` exista. No se utiliza el alias interno `clinica-alejandra-api`; si quedó de una instalación anterior, este proceso no lo elimina.
 
-Para el profesor, el YAML a importar/mostrar es `deploy/redhat-completo.yaml`. En recursos existentes usa `oc apply` (como hace el script) o actualiza su YAML; el botón Crear puede responder AlreadyExists. Después de cambios en GitHub vuelve a ejecutar el script para construir y desplegar las imágenes nuevas.
+Para importar/mostrar YAML en la consola, usa `deploy/openshift-frontend.yaml`. El nombre histórico `deploy/redhat-completo.yaml` se conserva por compatibilidad, pero ahora contiene solo los mismos recursos frontend. Si ya existen, utiliza `oc apply` como hace el script, o edita esos recursos. Importar desde Git construye el Dockerfile y no aplica automáticamente los archivos YAML.
 
-## Página y comprobaciones
+## Comprobar
 
-URL prevista:
+Página prevista:
 
 `https://clinica-alejandra-frontend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com`
 
-- `/health` comprueba Nginx.
-- `/api/live` comprueba Express sin depender de MySQL.
-- `/api/health` comprueba también la conexión con MySQL.
-- La sonda de disponibilidad del backend usa `/api/health`; la sonda de vida usa `/api/live`. Una base inaccesible no provoca reinicios del proceso, pero la aplicación no se marca lista hasta conectar.
+- `/health`: Nginx disponible.
+- `/api/live`: Express responde a través del proxy.
+- `/api/health`: conexión a MySQL disponible a través del proxy.
 
-Si los logs muestran `ER_ACCESS_DENIED_ERROR`, la cuenta integrada no existe o no tiene permisos; `ER_BAD_DB_ERROR` indica otro nombre de esquema; `ENOTFOUND` indica un nombre de Service incorrecto. Corrige los datos reales en `src/config/demo.js` y reconstruye. No se han validado esas credenciales contra tu clúster desde el equipo de desarrollo.
+En la comprobación remota del 18 de noviembre de 2026, Express devolvió 200 en `/api/live` y emitió la cookie CSRF para el origen previsto del frontend. `/api/health` devolvió 503 con `DATABASE_UNAVAILABLE`. Esto indica que MySQL aún requiere revisión; conectar el frontend no corrige la cuenta, el esquema ni la conectividad de la base. El script informa esta diferencia y no declara éxito integral si MySQL falla.
 
-El YAML completo es la concatenación del manifiesto backend y el manifiesto frontend. No contiene configuración secreta referenciada. Se ha validado sintaxis y compilación local; cuotas, admisión y MySQL se verifican al ejecutarlo en Red Hat.
+Se verificaron compilación local, sintaxis del YAML y del script. La imagen de Nginx y la admisión del clúster se comprueban al construir y desplegar en Red Hat.

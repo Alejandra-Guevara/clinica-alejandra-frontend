@@ -31,9 +31,9 @@ El backend requiere una base previamente preparada. El archivo SQL llama a la ba
 
 ## OpenShift
 
-La demostración usa configuración integrada: API `/api` e indicador demo en `src/config/demo.js`, sin archivos .env ni argumentos de build. Nginx envía las solicitudes al único backend del proyecto.
+La configuración fija del frontend usa `/api` e indicador demo, sin .env. `nginx.conf` conecta con el backend HTTPS existente `clinica-alejandra-backend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com`, manteniendo cookies y CSRF en el mismo origen de la página.
 
-Consulta [deploy/README.md](deploy/README.md). El [YAML completo](deploy/redhat-completo.yaml) se aplica explícitamente mediante el script `deploy/deploy-redhat.sh`, que retira las referencias antiguas a Secrets/env del servicio y construye ambos repositorios desde GitHub. Importar desde Git no aplica los YAML automáticamente. El script comprueba el arranque y la conexión real de MySQL; no modifica tablas ni crea cuentas de base de datos.
+Consulta [deploy/README.md](deploy/README.md). El script `deploy/deploy-redhat.sh` aplica explícitamente el [YAML del frontend](deploy/openshift-frontend.yaml) y reconstruye solo este repositorio. No modifica ni crea backends y no requiere el servicio antiguo terminado en backend-git. Importar desde Git no aplica archivos YAML automáticamente. La conectividad de MySQL se verifica aparte con `/api/health`.
 ## GitHub
 
 Frontend: https://github.com/Alejandra-Guevara/clinica-alejandra-frontend. Backend: https://github.com/Alejandra-Guevara/clinica-alejandra-backend. La configuración de demostración del backend contiene credenciales públicas por petición de la propietaria; no se debe reutilizar para datos o servicios reales.

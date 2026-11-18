@@ -28,21 +28,6 @@ spec:
   triggers:
     - type: ConfigChange
 ---
-# Alias de red hacia el único backend Knative; no crea otro backend.
-# El manifiesto backend mantiene min-scale=1 para que este servicio tenga un pod.
-apiVersion: v1
-kind: Service
-metadata:
-  name: clinica-alejandra-api
-  namespace: maria-guevara-rio-dev
-spec:
-  selector:
-    serving.knative.dev/service: clinica-alejandra-backend-git
-  ports:
-    - name: http
-      port: 3000
-      targetPort: 8080
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
