@@ -28,38 +28,33 @@ spec:
   triggers:
     - type: ConfigChange
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: serving.knative.dev/v1
+kind: Service
 metadata:
   name: clinica-alejandra-frontend
   namespace: maria-guevara-rio-dev
-  annotations:
-    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"clinica-alejandra-frontend:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"frontend\")].image"}]'
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: clinica-alejandra-frontend
   template:
     metadata:
-      labels:
-        app: clinica-alejandra-frontend
+      annotations:
+        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/max-scale: "1"
     spec:
       containers:
-        - name: frontend
+        - name: clinica-alejandra-frontend
           image: image-registry.openshift-image-registry.svc:5000/maria-guevara-rio-dev/clinica-alejandra-frontend:latest
+          imagePullPolicy: Always
           ports:
-            - name: http
-              containerPort: 8080
+            - containerPort: 8080
           readinessProbe:
             httpGet:
               path: /health
-              port: http
+              port: 8080
             initialDelaySeconds: 3
           livenessProbe:
             httpGet:
               path: /health
-              port: http
+              port: 8080
             initialDelaySeconds: 10
           securityContext:
             allowPrivilegeEscalation: false
@@ -75,32 +70,6 @@ spec:
             limits:
               cpu: 300m
               memory: 256Mi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: clinica-alejandra-frontend
-  namespace: maria-guevara-rio-dev
-spec:
-  selector:
-    app: clinica-alejandra-frontend
-  ports:
-    - name: http
-      port: 8080
-      targetPort: http
----
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: clinica-alejandra-frontend
-  namespace: maria-guevara-rio-dev
-spec:
-  host: clinica-alejandra-frontend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com
-  to:
-    kind: Service
-    name: clinica-alejandra-frontend
-  port:
-    targetPort: http
-  tls:
-    termination: edge
-    insecureEdgeTerminationPolicy: Redirect
+  traffic:
+    - latestRevision: true
+      percent: 100

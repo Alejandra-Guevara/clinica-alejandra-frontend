@@ -8,6 +8,19 @@ React sigue usando `/api`. El archivo `nginx.conf` reenvía esas solicitudes a l
 
 Las cookies siguen siendo del mismo origen del frontend; no se requieren variables de entorno ni cambios en el código del backend. El Dockerfile instala el paquete de certificados CA y compila el frontend con la configuración integrada de `src/config/demo.js`. Vite conserva su proxy local a localhost:3000.
 
+## Reparar la Route anterior sin recompilar
+
+Si Knative indica Ready=True pero la URL devuelve la página 503 del router, la Route manual del antiguo Deployment puede interceptar el mismo host. En este proyecto se observó una Route `clinica-alejandra-frontend` con ese host y destino `clinica-alejandra-frontend`, correspondiente al manifiesto normal anterior.
+
+En la terminal de OpenShift:
+
+```bash
+curl -fsS https://raw.githubusercontent.com/Alejandra-Guevara/clinica-alejandra-frontend/main/deploy/deploy-redhat.sh -o /tmp/deploy-clinica.sh
+bash /tmp/deploy-clinica.sh --repair-route-only
+```
+
+El script solo retira esa Route si coinciden host y destino y no tiene propietario; primero guarda un respaldo YAML en /tmp y muestra su ubicación. No elimina el KSVC, pods, Services ni datos. No modifica el backend. Si detecta una Route diferente o gestionada por un controlador, se detiene sin retirarla. Luego prueba `/health` en la URL del KSVC con reintentos. Puede restaurarse la Route anterior aplicando el archivo de respaldo si se necesita revertir.
+
 ## Desplegar o reconstruir SOLO el frontend
 
 En la terminal `>_` de OpenShift:
@@ -17,7 +30,7 @@ curl -fsS https://raw.githubusercontent.com/Alejandra-Guevara/clinica-alejandra-
 bash /tmp/deploy-clinica.sh
 ```
 
-El script aplica `deploy/openshift-frontend.yaml`, construye este repositorio con Dockerfile y actualiza el Deployment `clinica-alejandra-frontend` usando la imagen construida. No aplica manifiestos backend, no crea otra API y no cambia MySQL. No exige que el backend anterior con nombre `clinica-alejandra-backend-git` exista. No se utiliza el alias interno `clinica-alejandra-api`; si quedó de una instalación anterior, este proceso no lo elimina.
+El script aplica `deploy/openshift-frontend.yaml`, construye este repositorio con Dockerfile y actualiza el servicio Knative existente `clinica-alejandra-frontend` usando el digest construido. Espera la generación nueva y Ready=True. El manifiesto no crea un Deployment normal, un Service interno manual ni una Route manual con el mismo host; Knative gestiona la exposición y mantiene una instancia activa. También repara la Route anterior como se describe arriba. No aplica manifiestos backend ni cambia MySQL.
 
 Para importar/mostrar YAML en la consola, usa `deploy/openshift-frontend.yaml`. El nombre histórico `deploy/redhat-completo.yaml` se conserva por compatibilidad, pero ahora contiene solo los mismos recursos frontend. Si ya existen, utiliza `oc apply` como hace el script, o edita esos recursos. Importar desde Git construye el Dockerfile y no aplica automáticamente los archivos YAML.
 
