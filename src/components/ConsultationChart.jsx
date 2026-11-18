@@ -1,5 +1,0 @@
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-
-export default function ConsultationChart({ data }) {
-  return <div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{top:10,right:8,bottom:0,left:-18}}><defs><linearGradient id="consultasFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2f8b85" stopOpacity={.19}/><stop offset="95%" stopColor="#2f8b85" stopOpacity={0}/></linearGradient></defs><CartesianGrid vertical={false} stroke="#edf1f2"/><XAxis dataKey="periodo" axisLine={false} tickLine={false} tick={{fill:'#8b999d',fontSize:11}} tickFormatter={(v)=>new Intl.DateTimeFormat('es-CO',{month:'short',timeZone:'America/Bogota'}).format(new Date(`${v}-01T12:00:00`))}/><YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill:'#8b999d',fontSize:11}}/><Tooltip contentStyle={{border:'1px solid #e6eeee',borderRadius:12,fontSize:12}}/><Area type="monotone" dataKey="total" name="Consultas" stroke="#328d85" strokeWidth={2.5} fill="url(#consultasFill)"/></AreaChart></ResponsiveContainer></div>
-}
