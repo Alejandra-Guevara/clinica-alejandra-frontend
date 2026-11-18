@@ -1,36 +1,126 @@
+# Importar/aplicar en maria-guevara-rio-dev. Actualiza el frontend existente.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
+spec:
+  runPolicy: Serial
+  source:
+    type: Git
+    git:
+      uri: https://github.com/Alejandra-Guevara/clinica-alejandra-frontend.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+      buildArgs:
+        - name: VITE_API_URL
+          value: /api
+        - name: VITE_DEMO_MODE
+          value: "true"
+  output:
+    to:
+      kind: ImageStreamTag
+      name: clinica-alejandra-frontend:latest
+  triggers:
+    - type: ConfigChange
+---
+# Alias de red hacia el único backend Knative; no crea otro backend.
+# El manifiesto backend mantiene min-scale=1 para que este servicio tenga un pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: clinica-alejandra-api
+  namespace: maria-guevara-rio-dev
+spec:
+  selector:
+    serving.knative.dev/service: clinica-alejandra-backend-git
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 8080
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
+  annotations:
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"clinica-alejandra-frontend:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"frontend\")].image"}]'
 spec:
-  replicas: 2
+  replicas: 1
   selector:
-    matchLabels: { app: clinica-alejandra-frontend }
+    matchLabels:
+      app: clinica-alejandra-frontend
   template:
     metadata:
-      labels: { app: clinica-alejandra-frontend }
+      labels:
+        app: clinica-alejandra-frontend
     spec:
       containers:
         - name: frontend
-          image: image-registry.openshift-image-registry.svc:5000/namespace/clinica-alejandra-frontend:latest
-          ports: [{ containerPort: 8080 }]
-          readinessProbe: { httpGet: { path: /health, port: 8080 }, initialDelaySeconds: 3 }
-          livenessProbe: { httpGet: { path: /health, port: 8080 }, initialDelaySeconds: 10 }
-          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 256Mi } }
+          image: image-registry.openshift-image-registry.svc:5000/maria-guevara-rio-dev/clinica-alejandra-frontend:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
 spec:
-  selector: { app: clinica-alejandra-frontend }
-  ports: [{ port: 8080, targetPort: 8080 }]
+  selector:
+    app: clinica-alejandra-frontend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
 spec:
-  to: { kind: Service, name: clinica-alejandra-frontend }
-  port: { targetPort: 8080 }
-  tls: { termination: edge, insecureEdgeTerminationPolicy: Redirect }
+  host: clinica-alejandra-frontend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com
+  to:
+    kind: Service
+    name: clinica-alejandra-frontend
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

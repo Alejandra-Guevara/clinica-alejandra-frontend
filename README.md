@@ -31,9 +31,9 @@ El backend requiere una base previamente preparada. El archivo SQL llama a la ba
 
 ## OpenShift
 
-El Dockerfile construye assets estaticos servidos por Nginx no root (puerto 8080), con fallback SPA y health endpoint. El valor predeterminado `VITE_API_URL=/api` usa el proxy de Nginx hacia el Service `clinica-alejandra-api:3000`, conservando un mismo origen para cookies de sesion y CSRF. Despliegue primero el backend y ambos proyectos en el mismo namespace de OpenShift; si usa otro namespace o nombre de Service, ajuste el upstream en `nginx.conf` y reconstruya la imagen frontend. Configure `FRONTEND_URL` del backend con el origen HTTPS de la Route frontend, `COOKIE_SECURE=true`, TLS de Routes y `TRUST_PROXY=2` para la cadena Route de OpenShift -> Nginx -> Express; ajuste ese numero si cambia la topologia de proxies. Ejemplo de Deployment/Service/Route TLS en `deploy/openshift-frontend.yaml`; no guarde secretos en la imagen.
+El procedimiento vigente está en [deploy/README.md](deploy/README.md). El YAML [deploy/redhat-completo.yaml](deploy/redhat-completo.yaml) construye los dos repositorios desde GitHub, reutiliza el backend Knative existente y publica el frontend en HTTPS. El script de despliegue comprueba los Secrets, espera la revisión nueva y valida la conexión por `/api/health`.
 
-
+El frontend usa `/api` y Nginx conserva el mismo origen para cookies y CSRF. El Service interno `clinica-alejandra-api:3000` envía al backend Knative en 8080. El ConfigMap incluye `FRONTEND_URL`, `DB_SSL=true` y la ubicación del MySQL existente. Confirma DB_NAME, las credenciales y TLS antes de desplegar. La carga de datos local y las migraciones no se importan al clúster con un push.
 ## GitHub
 
-Este proyecto tiene su propio repositorio Git. El remoto `origin` configurado apunta actualmente a `https://github.com/Alejandra-Guevara/clinica-alejandra-frontend.git`, distinto del nombre solicitado `clinica-alejandra`. Confirme la URL destino antes de cambiar el remoto o publicar cambios.
+Frontend: https://github.com/Alejandra-Guevara/clinica-alejandra-frontend. Backend: https://github.com/Alejandra-Guevara/clinica-alejandra-backend. Los Secrets, contraseñas y archivos .env quedan fuera de Git.

@@ -1,0 +1,290 @@
+# YAML completo para el proyecto maria-guevara-rio-dev. No contiene secretos.
+# Reutiliza el único backend ya creado como servicio Knative.
+# Requiere el Secret existente clinica-alejandra-backend-secret con
+# SESSION_SECRET, DB_USER y DB_PASSWORD. No recrea ni publica ese Secret.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: clinica-alejandra-backend-git
+  namespace: maria-guevara-rio-dev
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: clinica-alejandra-backend-git
+  namespace: maria-guevara-rio-dev
+spec:
+  runPolicy: Serial
+  source:
+    type: Git
+    git:
+      uri: https://github.com/Alejandra-Guevara/clinica-alejandra-backend.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: clinica-alejandra-backend-git:latest
+  triggers:
+    - type: ConfigChange
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clinica-alejandra-api-config
+  namespace: maria-guevara-rio-dev
+data:
+  NODE_ENV: production
+  DB_HOST: historia-clinica-db
+  DB_PORT: "3306"
+  # Cambiar si el esquema creado por historia-clinica-db-init tiene otro nombre.
+  DB_NAME: clinica-alejandra
+  DB_SSL: "true"
+  FRONTEND_URL: https://clinica-alejandra-frontend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com
+  COOKIE_SECURE: "true"
+  TRUST_PROXY: "2"
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: clinica-alejandra-backend-git
+  namespace: maria-guevara-rio-dev
+  labels:
+    app.kubernetes.io/part-of: historia-clinica
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/max-scale: "1"
+    spec:
+      containers:
+        - name: clinica-alejandra-backend-git
+          image: image-registry.openshift-image-registry.svc:5000/maria-guevara-rio-dev/clinica-alejandra-backend-git:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: clinica-alejandra-api-config
+            - secretRef:
+                name: clinica-alejandra-backend-secret
+          env:
+            - name: SESSION_SECRET
+              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: clinica-alejandra-backend-secret
+                  key: SESSION_SECRET
+            - name: DB_USER
+              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: clinica-alejandra-backend-secret
+                  key: DB_USER
+            - name: DB_PASSWORD
+              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: clinica-alejandra-backend-secret
+                  key: DB_PASSWORD
+            - name: DB_HOST
+              value: ""
+              valueFrom:
+                configMapKeyRef:
+                  name: clinica-alejandra-api-config
+                  key: DB_HOST
+            - name: DB_PORT
+              value: ""
+              valueFrom:
+                configMapKeyRef:
+                  name: clinica-alejandra-api-config
+                  key: DB_PORT
+            - name: DB_NAME
+              value: ""
+              valueFrom:
+                configMapKeyRef:
+                  name: clinica-alejandra-api-config
+                  key: DB_NAME
+            - name: DB_SSL
+              value: ""
+              valueFrom:
+                configMapKeyRef:
+                  name: clinica-alejandra-api-config
+                  key: DB_SSL
+            - name: FRONTEND_URL
+              value: ""
+              valueFrom:
+                configMapKeyRef:
+                  name: clinica-alejandra-api-config
+                  key: FRONTEND_URL
+          volumeMounts:
+            - name: mysql-ca
+              mountPath: /etc/mysql-ca
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/live
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: mysql-ca
+          secret:
+            secretName: clinica-alejandra-db-ca
+            optional: true
+  traffic:
+    - latestRevision: true
+      percent: 100
+
+---
+# Importar/aplicar en maria-guevara-rio-dev. Actualiza el frontend existente.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
+spec:
+  runPolicy: Serial
+  source:
+    type: Git
+    git:
+      uri: https://github.com/Alejandra-Guevara/clinica-alejandra-frontend.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+      buildArgs:
+        - name: VITE_API_URL
+          value: /api
+        - name: VITE_DEMO_MODE
+          value: "true"
+  output:
+    to:
+      kind: ImageStreamTag
+      name: clinica-alejandra-frontend:latest
+  triggers:
+    - type: ConfigChange
+---
+# Alias de red hacia el único backend Knative; no crea otro backend.
+# El manifiesto backend mantiene min-scale=1 para que este servicio tenga un pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: clinica-alejandra-api
+  namespace: maria-guevara-rio-dev
+spec:
+  selector:
+    serving.knative.dev/service: clinica-alejandra-backend-git
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
+  annotations:
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"clinica-alejandra-frontend:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"frontend\")].image"}]'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clinica-alejandra-frontend
+  template:
+    metadata:
+      labels:
+        app: clinica-alejandra-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: image-registry.openshift-image-registry.svc:5000/maria-guevara-rio-dev/clinica-alejandra-frontend:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
+spec:
+  selector:
+    app: clinica-alejandra-frontend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: clinica-alejandra-frontend
+  namespace: maria-guevara-rio-dev
+spec:
+  host: clinica-alejandra-frontend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com
+  to:
+    kind: Service
+    name: clinica-alejandra-frontend
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
