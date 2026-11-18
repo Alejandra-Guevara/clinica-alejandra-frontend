@@ -1,0 +1,84 @@
+# Demostración integrada: reutiliza el backend existente sin env ni Secrets manuales.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: clinica-alejandra-backend-git
+  namespace: maria-guevara-rio-dev
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: clinica-alejandra-backend-git
+  namespace: maria-guevara-rio-dev
+spec:
+  runPolicy: Serial
+  source:
+    type: Git
+    git:
+      uri: https://github.com/Alejandra-Guevara/clinica-alejandra-backend.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: clinica-alejandra-backend-git:latest
+  triggers:
+    - type: ConfigChange
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: clinica-alejandra-backend-git
+  namespace: maria-guevara-rio-dev
+  labels:
+    app.kubernetes.io/part-of: historia-clinica
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/max-scale: "1"
+    spec:
+      containers:
+        - name: clinica-alejandra-backend-git
+          image: image-registry.openshift-image-registry.svc:5000/maria-guevara-rio-dev/clinica-alejandra-backend-git:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env: []
+          envFrom: []
+          volumeMounts: []
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/live
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes: []
+  traffic:
+    - latestRevision: true
+      percent: 100
