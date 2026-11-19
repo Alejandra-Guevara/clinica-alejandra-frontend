@@ -1,49 +1,39 @@
-# Frontend conectado al backend existente
+# Clínica Alejandra · Frontend
 
-Backend informado por la propietaria:
+Aplicación React/Vite conectada a la API independiente `../clinica-alejandra-backend`. Toda interacción de base de datos ocurre en Express. La base y las tablas siguen el SQL suministrado.
 
-`https://clinica-alejandra-backend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com`
+## Ejecución local
 
-React sigue usando `/api`. El archivo `nginx.conf` reenvía esas solicitudes a la Route HTTPS anterior, conserva el recorrido `/api/...`, envía el Host y SNI adecuados y verifica el certificado con las CA de la imagen. No se coloca `/api/health` como URL base de las llamadas: esa dirección sirve solo para comprobar MySQL.
-
-Las cookies siguen siendo del mismo origen del frontend; no se requieren variables de entorno ni cambios en el código del backend. El Dockerfile instala el paquete de certificados CA y compila el frontend con la configuración integrada de `src/config/demo.js`. Vite conserva su proxy local a localhost:3000.
-
-## Reparar la Route anterior sin recompilar
-
-Si Knative indica Ready=True pero la URL devuelve la página 503 del router, la Route manual del antiguo Deployment puede interceptar el mismo host. En este proyecto se observó una Route `clinica-alejandra-frontend` con ese host y destino `clinica-alejandra-frontend`, correspondiente al manifiesto normal anterior.
-
-En la terminal de OpenShift:
+Requiere Node 22. Configure MySQL/XAMPP e inicie el backend primero. La API local se conecta mediante el proxy de Vite a `http://localhost:3000`, sin .env. Ejecute:
 
 ```bash
-curl -fsS https://raw.githubusercontent.com/Alejandra-Guevara/clinica-alejandra-frontend/main/deploy/deploy-redhat.sh -o /tmp/deploy-clinica.sh
-bash /tmp/deploy-clinica.sh --repair-route-only
+npm install
+npm run dev
+npm run build
+npm run lint
+npm test
 ```
 
-El script solo retira esa Route si coinciden host y destino y no tiene propietario; primero guarda un respaldo YAML en /tmp y muestra su ubicación. No elimina el KSVC, pods, Services ni datos. No modifica el backend. Si detecta una Route diferente o gestionada por un controlador, se detiene sin retirarla. Luego prueba `/health` en la URL del KSVC con reintentos. Puede restaurarse la Route anterior aplicando el archivo de respaldo si se necesita revertir.
+El backend requiere una base previamente preparada. El archivo SQL llama a la base `historias_clinicas`, aunque el requisito inicial menciona `clinica-alejandra`; `DB_NAME` permite apuntar a la base existente sin crearla ni renombrarla. Consulte el README del backend y revise el SQL antes de importarlo.
 
-## Desplegar o reconstruir SOLO el frontend
+## Funcionalidad actual
 
-En la terminal `>_` de OpenShift:
+- Login, sesión en cookie HttpOnly, control de rol de rutas y cierre de sesión.
+- Dashboard, búsquedas, ordenamiento en servidor, paginación, creación/edición y detalle conectado a la API para los recursos definidos en `src/components/ResourcePage.jsx`.
+- Layout responsive en español, tablas reutilizables, estados de carga/error/vacío, formularios con React Hook Form/Zod, avisos Sonner y gráfico Recharts.
+- Los campos de relaciones cargan listas desde la API (hasta 100 opciones por tipo). La ficha clínica usa `GET /api/pacientes/:id/record` para mostrar consultas, diagnósticos, signos vitales, recetas, órdenes, alergias y antecedentes; el panel de auditoría de esa ficha solo está disponible para Administradores y se puede imprimir. El portal usa `GET /api/pacientes/portal/me` y limita la ficha al paciente autenticado.
+- Recetas y órdenes médicas tienen formularios compuestos: cada cabecera y sus líneas se guardan en una transacción para consultas en borrador autorizadas. Los formularios advierten antes de descartar cambios o cerrar la pestaña.
+- Administradores y personal administrativo pueden asignar/revocar acceso de médicos a historias desde el módulo “Asignar médico”; la migración 002 conserva asignaciones derivadas de consultas existentes.
 
-```bash
-curl -fsS https://raw.githubusercontent.com/Alejandra-Guevara/clinica-alejandra-frontend/main/deploy/deploy-redhat.sh -o /tmp/deploy-clinica.sh
-bash /tmp/deploy-clinica.sh
-```
+## Alcance pendiente
 
-El script aplica `deploy/openshift-frontend.yaml`, construye este repositorio con Dockerfile y actualiza el servicio Knative existente `clinica-alejandra-frontend` usando el digest construido. Espera la generación nueva y Ready=True. El manifiesto no crea un Deployment normal, un Service interno manual ni una Route manual con el mismo host; Knative gestiona la exposición y mantiene una instancia activa. También repara la Route anterior como se describe arriba. No aplica manifiestos backend ni cambia MySQL.
+`npm run test:e2e` ejecuta ocho flujos con API simulada: login/logout, ficha y auditoria, denegacion por rol, portal, asignaciones y busqueda contextual de pacientes. La funcion y las rutas de recuperacion de contrasena se eliminaron. Las asociaciones se registran desde formularios con opciones de referencia cargadas desde la API. Usuarios y roles tienen gestion administrativa; los nombres de roles base estan protegidos. Los registros pueden crearse y editarse según el rol; la eliminación está deshabilitada. Las historias clínicas se archivan y la auditoría se conserva. No se simulan filas para completar el dashboard.
 
-Para importar/mostrar YAML en la consola, usa `deploy/openshift-frontend.yaml`. El nombre histórico `deploy/redhat-completo.yaml` se conserva por compatibilidad, pero ahora contiene solo los mismos recursos frontend. Si ya existen, utiliza `oc apply` como hace el script, o edita esos recursos. Importar desde Git construye el Dockerfile y no aplica automáticamente los archivos YAML.
+## OpenShift
 
-## Comprobar
+La configuración fija del frontend usa `/api` e indicador demo, sin .env. `nginx.conf` conecta con el backend HTTPS existente `clinica-alejandra-backend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com`, manteniendo cookies y CSRF en el mismo origen de la página.
 
-Página prevista:
+Consulta [deploy/README.md](deploy/README.md). El script `deploy/deploy-redhat.sh` aplica explícitamente el [YAML del frontend](deploy/openshift-frontend.yaml) y reconstruye solo este repositorio. No modifica ni crea backends y no requiere el servicio antiguo terminado en backend-git. Importar desde Git no aplica archivos YAML automáticamente. La conectividad de MySQL se verifica aparte con `/api/health`.
+## GitHub
 
-`https://clinica-alejandra-frontend-maria-guevara-rio-dev.apps.rm3.7wse.p1.openshiftapps.com`
-
-- `/health`: Nginx disponible.
-- `/api/live`: Express responde a través del proxy.
-- `/api/health`: conexión a MySQL disponible a través del proxy.
-
-En la comprobación remota del 18 de noviembre de 2026, Express devolvió 200 en `/api/live` y emitió la cookie CSRF para el origen previsto del frontend. `/api/health` devolvió 503 con `DATABASE_UNAVAILABLE`. Esto indica que MySQL aún requiere revisión; conectar el frontend no corrige la cuenta, el esquema ni la conectividad de la base. El script informa esta diferencia y no declara éxito integral si MySQL falla.
-
-Se verificaron compilación local, sintaxis del YAML y del script. La imagen de Nginx y la admisión del clúster se comprueban al construir y desplegar en Red Hat.
+Frontend: https://github.com/Alejandra-Guevara/clinica-alejandra-frontend. Backend: https://github.com/Alejandra-Guevara/clinica-alejandra-backend. La configuración de demostración del backend contiene credenciales públicas por petición de la propietaria; no se debe reutilizar para datos o servicios reales.
